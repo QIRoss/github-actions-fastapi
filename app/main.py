@@ -22,7 +22,7 @@ fake_db = [
 
 @app.get("/")
 async def read_root():
-    return {"message": "GitHub Actions modified this!"}
+    return {"message": "GitHub Actions modified this 2!"}
 
 @app.get("/health")
 async def health_check():
