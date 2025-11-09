@@ -33,13 +33,6 @@ jobs:
       run: |
         pytest tests/ -v
 
-    # - name: Upload coverage reports
-    #   uses: codecov/codecov-action@v3
-    #   with:
-    #     file: ./coverage.xml
-    #     flags: unittests
-    #     name: codecov-umbrella
-
   build-and-push:
     name: Build and Push Docker Image
     needs: test
@@ -64,16 +57,20 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
+    - name: Convert repository name to lowercase
+      id: repo_name
+      run: |
+        echo "REPO_LOWER=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+
     - name: Extract metadata
       id: meta
       uses: docker/metadata-action@v5
       with:
-        images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
+        images: ${{ env.REGISTRY }}/${{ steps.repo_name.outputs.REPO_LOWER }}/${{ env.IMAGE_NAME }}
         tags: |
           type=ref,event=branch
           type=sha,prefix={{branch}}-
           type=raw,value=latest
-          type=raw,value={{date 'YYYYMMDD-HHmmss'}}
 
     - name: Build and push Docker image
       uses: docker/build-push-action@v5
@@ -84,11 +81,6 @@ jobs:
         labels: ${{ steps.meta.outputs.labels }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
-        platforms: linux/amd64
-
-    - name: Print image info
-      run: |
-        echo "Image pushed: ${{ steps.meta.outputs.tags }}"
 
   deploy:
     name: Deploy to Self-Hosted Runner
@@ -107,6 +99,11 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
+    - name: Convert repository name to lowercase
+      id: repo_name
+      run: |
+        echo "REPO_LOWER=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+
     - name: Stop and remove existing container
       run: |
         docker stop ${{ env.IMAGE_NAME }} || true
@@ -114,7 +111,7 @@ jobs:
 
     - name: Pull latest image
       run: |
-        docker pull ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:latest
+        docker pull ${{ env.REGISTRY }}/${{ steps.repo_name.outputs.REPO_LOWER }}/${{ env.IMAGE_NAME }}:latest
 
     - name: Run container
       run: |
@@ -123,11 +120,11 @@ jobs:
           --restart unless-stopped \
           -p 8000:8000 \
           -e ENVIRONMENT=production \
-          ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:latest
+          ${{ env.REGISTRY }}/${{ steps.repo_name.outputs.REPO_LOWER }}/${{ env.IMAGE_NAME }}:latest
 
     - name: Wait for application to start
       run: |
-        timeout 30s bash -c 'until curl -f http://localhost:8000/health; do sleep 2; done'
+        timeout 60s bash -c 'until curl -f http://localhost:8000/health; do sleep 2; done'
 
     - name: Verify deployment
       run: |
